@@ -74,6 +74,9 @@ let state = loadState();
 let selectedDate = formatDate(new Date());
 let selectedMedId = state.meds[0]?.id || "";
 let notificationTimer = null;
+let medFormDirty = false;
+let settingsFormDirty = false;
+let statusTimer = null;
 
 const el = {
   todayLabel: document.querySelector("#todayLabel"),
@@ -92,6 +95,7 @@ const el = {
   prevDayButton: document.querySelector("#prevDayButton"),
   nextDayButton: document.querySelector("#nextDayButton"),
   timelineList: document.querySelector("#timelineList"),
+  doseChart: document.querySelector("#doseChart"),
   medList: document.querySelector("#medList"),
   medForm: document.querySelector("#medForm"),
   medId: document.querySelector("#medId"),
@@ -104,6 +108,7 @@ const el = {
   medPreferredTimes: document.querySelector("#medPreferredTimes"),
   medColor: document.querySelector("#medColor"),
   medActive: document.querySelector("#medActive"),
+  medSaveStatus: document.querySelector("#medSaveStatus"),
   newMedButton: document.querySelector("#newMedButton"),
   deleteMedButton: document.querySelector("#deleteMedButton"),
   recordsList: document.querySelector("#recordsList"),
@@ -118,6 +123,7 @@ const el = {
   importBox: document.querySelector("#importBox"),
   importButton: document.querySelector("#importButton"),
   resetButton: document.querySelector("#resetButton"),
+  settingsSaveStatus: document.querySelector("#settingsSaveStatus"),
 };
 
 function loadState() {
@@ -357,6 +363,61 @@ function renderTimeline(schedule) {
   });
 }
 
+function renderDoseChart(schedule) {
+  el.doseChart.innerHTML = "";
+  if (!schedule.length) return;
+
+  const groups = activeMedsFor(selectedDate).map((med) => ({
+    med,
+    doses: schedule.filter((dose) => dose.med.id === med.id),
+  }));
+
+  const start = minutesFromTime(state.settings.wakeTime);
+  const end = minutesFromTime(state.settings.sleepTime);
+  const span = Math.max(1, end - start);
+
+  const ruler = document.createElement("div");
+  ruler.className = "chart-ruler";
+  ["08:00", "12:00", "16:00", "20:00", "23:00"].forEach((time) => {
+    const marker = document.createElement("span");
+    const minute = minutesFromTime(time);
+    marker.style.left = `${Math.max(0, Math.min(100, ((minute - start) / span) * 100))}%`;
+    marker.textContent = time;
+    ruler.appendChild(marker);
+  });
+  el.doseChart.appendChild(ruler);
+
+  groups.forEach(({ med, doses }) => {
+    const row = document.createElement("div");
+    row.className = "chart-row";
+    row.style.setProperty("--dose-color", med.color);
+
+    const label = document.createElement("div");
+    label.className = "chart-label";
+    label.innerHTML = `<strong>${med.name}</strong><span>${doses.filter((dose) => dose.isDone).length}/${doses.length}</span>`;
+
+    const track = document.createElement("div");
+    track.className = "chart-track";
+
+    doses.forEach((dose) => {
+      const point = document.createElement("button");
+      point.type = "button";
+      point.className = "chart-point";
+      point.classList.toggle("done", dose.isDone);
+      point.classList.toggle("missed", getDoseState(dose) === "逾期");
+      point.dataset.key = dose.key;
+      point.style.left = `${Math.max(2, Math.min(98, ((dose.scheduledMinute - start) / span) * 100))}%`;
+      point.title = `${dose.med.name} ${dose.scheduledTime}`;
+      point.textContent = dose.doseIndex;
+      point.disabled = dose.isDone;
+      track.appendChild(point);
+    });
+
+    row.append(label, track);
+    el.doseChart.appendChild(row);
+  });
+}
+
 function renderMeds() {
   el.medList.innerHTML = "";
   state.meds.forEach((med) => {
@@ -371,6 +432,7 @@ function renderMeds() {
 
   const med = state.meds.find((item) => item.id === selectedMedId) || state.meds[0];
   if (!med) return;
+  if (medFormDirty && el.medId.value === med.id) return;
   selectedMedId = med.id;
   el.medId.value = med.id;
   el.medName.value = med.name;
@@ -408,6 +470,7 @@ function renderRecords(schedule) {
 }
 
 function renderSettings() {
+  if (settingsFormDirty) return;
   el.operationDate.value = state.settings.operationDate;
   el.wakeTime.value = state.settings.wakeTime;
   el.sleepTime.value = state.settings.sleepTime;
@@ -444,11 +507,22 @@ function renderAll() {
   renderNextPanel(schedule);
   renderSummary(schedule);
   renderSequenceMode(schedule);
+  renderDoseChart(schedule);
   renderTimeline(schedule);
   renderMeds();
   renderRecords(schedule);
   renderSettings();
   scheduleNotification(schedule);
+}
+
+function showStatus(target, message) {
+  if (statusTimer) clearTimeout(statusTimer);
+  target.textContent = message;
+  target.classList.add("visible");
+  statusTimer = setTimeout(() => {
+    target.classList.remove("visible");
+    target.textContent = "";
+  }, 2200);
 }
 
 function completeDose(key) {
@@ -532,6 +606,12 @@ el.timelineList.addEventListener("click", (event) => {
   if (button.classList.contains("undo-dose")) undoDose(button.dataset.key);
 });
 
+el.doseChart.addEventListener("click", (event) => {
+  const button = event.target.closest(".chart-point");
+  if (!button) return;
+  completeDose(button.dataset.key);
+});
+
 el.prevDayButton.addEventListener("click", () => {
   selectedDate = addDays(selectedDate, -1);
   renderAll();
@@ -552,8 +632,17 @@ el.openSettingsButton.addEventListener("click", () => switchTab("settings"));
 el.medList.addEventListener("click", (event) => {
   const card = event.target.closest(".med-card");
   if (!card) return;
+  medFormDirty = false;
   selectedMedId = card.dataset.id;
   renderMeds();
+});
+
+el.medForm.addEventListener("input", () => {
+  medFormDirty = true;
+});
+
+el.settingsForm.addEventListener("input", () => {
+  settingsFormDirty = true;
 });
 
 el.newMedButton.addEventListener("click", () => {
@@ -572,6 +661,7 @@ el.newMedButton.addEventListener("click", () => {
   };
   state.meds.push(med);
   selectedMedId = id;
+  medFormDirty = false;
   saveState();
   renderAll();
 });
@@ -589,14 +679,17 @@ el.medForm.addEventListener("submit", (event) => {
   med.preferredTimes = normalizeTimeList(el.medPreferredTimes.value);
   med.color = el.medColor.value;
   med.active = el.medActive.checked;
+  medFormDirty = false;
   saveState();
   renderAll();
+  showStatus(el.medSaveStatus, "已保存");
 });
 
 el.deleteMedButton.addEventListener("click", () => {
   if (!confirm("确定删除这瓶药水吗？历史记录不会自动清除。")) return;
   state.meds = state.meds.filter((med) => med.id !== el.medId.value);
   selectedMedId = state.meds[0]?.id || "";
+  medFormDirty = false;
   saveState();
   renderAll();
 });
@@ -608,8 +701,10 @@ el.settingsForm.addEventListener("submit", (event) => {
   state.settings.sleepTime = el.sleepTime.value;
   state.settings.defaultInterval = Number(el.defaultInterval.value);
   state.settings.recommendedTimes = parseRecommendedTimes(el.recommendedTimes.value);
+  settingsFormDirty = false;
   saveState();
   renderAll();
+  showStatus(el.settingsSaveStatus, "已保存");
 });
 
 el.clearDayButton.addEventListener("click", () => {
@@ -627,6 +722,8 @@ el.resetButton.addEventListener("click", () => {
   if (!confirm("确定恢复默认配置吗？这会清空本地记录。")) return;
   state = structuredClone(defaultState);
   selectedMedId = state.meds[0]?.id || "";
+  medFormDirty = false;
+  settingsFormDirty = false;
   saveState();
   renderAll();
 });

@@ -68,6 +68,7 @@
               <button class="secondary-action compact" id="nextDayButton" type="button">后一天</button>
             </div>
           </div>
+          <div class="dose-chart" id="doseChart" aria-label="今日药水甘特图"></div>
           <div class="timeline" id="timelineList"></div>
         </section>
 
@@ -122,6 +123,7 @@
               </div>
               <div class="action-row">
                 <button class="primary-action" type="submit">保存药水</button>
+                <span class="save-status" id="medSaveStatus" aria-live="polite"></span>
                 <button class="danger-action" id="deleteMedButton" type="button">删除</button>
               </div>
             </form>
@@ -170,6 +172,7 @@
             </label>
             <div class="action-row">
               <button class="primary-action" type="submit">保存设置</button>
+              <span class="save-status" id="settingsSaveStatus" aria-live="polite"></span>
               <button class="secondary-action" id="importButton" type="button">导入</button>
               <button class="danger-action" id="resetButton" type="button">恢复默认</button>
             </div>
