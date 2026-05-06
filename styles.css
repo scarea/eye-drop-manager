@@ -90,7 +90,7 @@ h1 {
 
 .next-panel,
 .summary-panel,
-.work-panel,
+.sequence-panel,
 .tab-panel,
 .editor,
 .settings-form {
@@ -102,7 +102,7 @@ h1 {
 
 .next-panel,
 .summary-panel,
-.work-panel {
+.sequence-panel {
   padding: 18px;
 }
 
@@ -138,7 +138,7 @@ h1 {
 }
 
 .next-panel p,
-.work-panel p,
+.sequence-panel p,
 .summary-panel p {
   color: var(--muted);
   line-height: 1.6;

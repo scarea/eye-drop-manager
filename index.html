@@ -43,16 +43,12 @@
             <p id="missedSummary">暂无逾期</p>
           </article>
 
-          <article class="work-panel">
+          <article class="sequence-panel">
             <div class="panel-heading">
-              <span>上班模式</span>
-              <label class="switch">
-                <input id="workModeToggle" type="checkbox" />
-                <span></span>
-              </label>
+              <span>顺序模式</span>
             </div>
-            <p id="workModeText"></p>
-            <button class="secondary-action compact" id="openSettingsButton" type="button">调整不可滴时段</button>
+            <p id="sequenceText"></p>
+            <button class="secondary-action compact" id="openSettingsButton" type="button">调整推荐时间</button>
           </article>
         </section>
 
@@ -110,6 +106,10 @@
                 用法备注
                 <textarea id="medNote" rows="3" placeholder="例如：双眼，每次1滴；使用前摇匀"></textarea>
               </label>
+              <label>
+                推荐时间
+                <input id="medPreferredTimes" type="text" placeholder="留空则按每天次数自动套用，例如：08:30,12:30,18:30,22:30" />
+              </label>
               <div class="form-grid">
                 <label>
                   颜色
@@ -161,8 +161,8 @@
               </label>
             </div>
             <label>
-              不可滴时段
-              <textarea id="blockedTimes" rows="4" placeholder="每行一个时间段，例如：09:30-12:00"></textarea>
+              按次数推荐时间
+              <textarea id="recommendedTimes" rows="5" placeholder="每行一个规则，例如：4=08:30,12:30,18:30,22:30"></textarea>
             </label>
             <label>
               导入配置

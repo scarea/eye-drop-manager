@@ -7,8 +7,14 @@ const defaultState = {
     wakeTime: "07:30",
     sleepTime: "23:30",
     defaultInterval: 5,
-    blockedTimes: ["09:30-12:00", "14:00-18:00"],
-    workMode: true,
+    recommendedTimes: {
+      1: ["21:30"],
+      2: ["08:30", "21:30"],
+      3: ["08:30", "14:30", "21:30"],
+      4: ["08:30", "12:30", "18:30", "22:30"],
+      5: ["08:30", "11:30", "14:30", "18:30", "22:30"],
+      6: ["08:30", "10:30", "12:30", "15:30", "18:30", "22:30"],
+    },
   },
   meds: [
     {
@@ -19,6 +25,7 @@ const defaultState = {
       startDate: "2026-05-03",
       endDate: "2026-05-09",
       note: "双眼，每次1滴；常规抗感染用药，请按医生要求停用",
+      preferredTimes: ["08:30", "12:30", "18:30", "22:30"],
       color: "#c84b5f",
       active: true,
     },
@@ -30,6 +37,7 @@ const defaultState = {
       startDate: "2026-05-03",
       endDate: "2026-08-03",
       note: "双眼，每次1滴；使用前摇匀，后续递减按医嘱调整",
+      preferredTimes: ["08:35", "12:35", "18:35", "22:35"],
       color: "#3b82c4",
       active: true,
     },
@@ -41,6 +49,7 @@ const defaultState = {
       startDate: "2026-05-03",
       endDate: "2026-06-03",
       note: "双眼，每次1滴；干涩时按医生要求使用",
+      preferredTimes: ["08:40", "12:40", "18:40", "22:40"],
       color: "#2f9d8f",
       active: true,
     },
@@ -52,6 +61,7 @@ const defaultState = {
       startDate: "2026-05-03",
       endDate: "2026-08-03",
       note: "双眼，每次1滴；1日多次时请与其他药间隔",
+      preferredTimes: ["08:45", "15:30", "22:45"],
       color: "#6f63c4",
       active: true,
     },
@@ -76,8 +86,7 @@ const el = {
   todayProgress: document.querySelector("#todayProgress"),
   progressBar: document.querySelector("#progressBar"),
   missedSummary: document.querySelector("#missedSummary"),
-  workModeToggle: document.querySelector("#workModeToggle"),
-  workModeText: document.querySelector("#workModeText"),
+  sequenceText: document.querySelector("#sequenceText"),
   openSettingsButton: document.querySelector("#openSettingsButton"),
   selectedDate: document.querySelector("#selectedDate"),
   prevDayButton: document.querySelector("#prevDayButton"),
@@ -92,6 +101,7 @@ const el = {
   medStart: document.querySelector("#medStart"),
   medEnd: document.querySelector("#medEnd"),
   medNote: document.querySelector("#medNote"),
+  medPreferredTimes: document.querySelector("#medPreferredTimes"),
   medColor: document.querySelector("#medColor"),
   medActive: document.querySelector("#medActive"),
   newMedButton: document.querySelector("#newMedButton"),
@@ -103,7 +113,7 @@ const el = {
   wakeTime: document.querySelector("#wakeTime"),
   sleepTime: document.querySelector("#sleepTime"),
   defaultInterval: document.querySelector("#defaultInterval"),
-  blockedTimes: document.querySelector("#blockedTimes"),
+  recommendedTimes: document.querySelector("#recommendedTimes"),
   exportButton: document.querySelector("#exportButton"),
   importBox: document.querySelector("#importBox"),
   importButton: document.querySelector("#importButton"),
@@ -169,39 +179,36 @@ function toDateTime(dateString, time) {
   return new Date(`${dateString}T${time}:00`);
 }
 
-function parseBlockedTimes() {
-  if (!state.settings.workMode) return [];
-  return state.settings.blockedTimes
-    .map((range) => {
-      const [start, end] = range.split("-").map((part) => part.trim());
-      if (!start || !end) return null;
-      return { start: minutesFromTime(start), end: minutesFromTime(end) };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start);
-}
-
-function isBlocked(minute, blocked) {
-  return blocked.some((range) => minute >= range.start && minute < range.end);
-}
-
-function moveOutOfBlocked(minute, blocked) {
-  let current = minute;
-  for (const range of blocked) {
-    if (current >= range.start && current < range.end) current = range.end;
-  }
-  return current;
-}
-
 function activeMedsFor(dateString) {
   return state.meds.filter((med) => {
     return med.active && dateString >= med.startDate && dateString <= med.endDate;
   });
 }
 
-function doseBaseTimes(timesPerDay) {
+function normalizeTimeList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (!value) return [];
+  return String(value)
+    .split(",")
+    .map((time) => time.trim())
+    .filter(Boolean);
+}
+
+function doseBaseTimes(med) {
+  const customTimes = normalizeTimeList(med.preferredTimes);
+  const recommended = customTimes.length
+    ? customTimes
+    : state.settings.recommendedTimes?.[med.timesPerDay] || state.settings.recommendedTimes?.[String(med.timesPerDay)] || [];
+  if (recommended.length) {
+    return Array.from({ length: Number(med.timesPerDay) }, (_, index) => {
+      const time = recommended[Math.min(index, recommended.length - 1)];
+      return minutesFromTime(time);
+    });
+  }
+
   const start = minutesFromTime(state.settings.wakeTime);
   const end = minutesFromTime(state.settings.sleepTime);
+  const timesPerDay = Number(med.timesPerDay);
   if (timesPerDay <= 1) return [start];
   const step = (end - start) / (timesPerDay - 1);
   return Array.from({ length: timesPerDay }, (_, index) => start + step * index);
@@ -212,12 +219,11 @@ function doseKey(dateString, medId, doseIndex) {
 }
 
 function generateSchedule(dateString) {
-  const blocked = parseBlockedTimes();
   const defaultInterval = Number(state.settings.defaultInterval || 5);
   const candidates = [];
 
   activeMedsFor(dateString).forEach((med) => {
-    doseBaseTimes(Number(med.timesPerDay)).forEach((baseMinute, index) => {
+    doseBaseTimes(med).forEach((baseMinute, index) => {
       const key = doseKey(dateString, med.id, index + 1);
       const delay = Number(state.delays[key] || 0);
       candidates.push({
@@ -225,6 +231,7 @@ function generateSchedule(dateString) {
         med,
         doseIndex: index + 1,
         baseMinute: baseMinute + delay,
+        recommendedMinute: baseMinute,
       });
     });
   });
@@ -235,8 +242,6 @@ function generateSchedule(dateString) {
   return candidates.map((item) => {
     const interval = Number(item.med.intervalMinutes || defaultInterval);
     let scheduledMinute = Math.max(item.baseMinute, lastMinute + interval);
-    scheduledMinute = moveOutOfBlocked(scheduledMinute, blocked);
-    if (isBlocked(scheduledMinute, blocked)) scheduledMinute = moveOutOfBlocked(scheduledMinute, blocked);
     lastMinute = scheduledMinute;
     const scheduledTime = timeFromMinutes(scheduledMinute);
     const record = state.records[item.key];
@@ -244,6 +249,7 @@ function generateSchedule(dateString) {
       ...item,
       scheduledMinute,
       scheduledTime,
+      recommendedTime: timeFromMinutes(item.recommendedMinute),
       scheduledAt: toDateTime(dateString, scheduledTime),
       record,
       isDone: record?.status === "done",
@@ -291,8 +297,10 @@ function renderNextPanel(schedule) {
   const now = new Date();
   const diff = upcoming.scheduledAt - now;
   const waitText = diff > 0 ? `还有 ${Math.ceil(diff / MINUTE)} 分钟` : "现在可以滴";
+  const recommendedText =
+    upcoming.recommendedTime === upcoming.scheduledTime ? "" : `推荐 ${upcoming.recommendedTime}，`;
   el.nextTitle.textContent = upcoming.med.name;
-  el.nextDetail.textContent = `${upcoming.scheduledTime}，第 ${upcoming.doseIndex}/${upcoming.med.timesPerDay} 次。${waitText}。${upcoming.med.note || ""}`;
+  el.nextDetail.textContent = `${recommendedText}当前排队 ${upcoming.scheduledTime}，第 ${upcoming.doseIndex}/${upcoming.med.timesPerDay} 次。${waitText}。${upcoming.med.note || ""}`;
   el.completeNextButton.disabled = false;
   el.delayNextButton.disabled = false;
   el.completeNextButton.dataset.key = upcoming.key;
@@ -306,12 +314,12 @@ function renderSummary(schedule) {
   el.missedSummary.textContent = missed ? `${missed} 次已逾期，可按实际情况补滴或跳过` : "暂无逾期";
 }
 
-function renderWorkMode() {
-  el.workModeToggle.checked = state.settings.workMode;
-  const ranges = state.settings.blockedTimes.join("、") || "未设置";
-  el.workModeText.textContent = state.settings.workMode
-    ? `已避开不可滴时段：${ranges}`
-    : "关闭后，计划会均匀分布在起床到睡觉之间。";
+function renderSequenceMode(schedule) {
+  const activeCount = new Set(schedule.map((dose) => dose.med.id)).size;
+  const interval = Number(state.settings.defaultInterval || 5);
+  el.sequenceText.textContent = activeCount
+    ? `${activeCount} 种药水按推荐时间排序；晚点时优先补最早未完成的一次，并保持至少 ${interval} 分钟间隔。`
+    : "当前日期没有启用的药水。";
 }
 
 function renderTimeline(schedule) {
@@ -333,7 +341,7 @@ function renderTimeline(schedule) {
     node.querySelector(".dose-time").textContent = dose.scheduledTime;
     node.querySelector(".dose-state").textContent = stateText;
     node.querySelector("h3").textContent = dose.med.name;
-    node.querySelector("p").textContent = `第 ${dose.doseIndex}/${dose.med.timesPerDay} 次`;
+    node.querySelector("p").textContent = `第 ${dose.doseIndex}/${dose.med.timesPerDay} 次，推荐 ${dose.recommendedTime}`;
     node.querySelector("small").textContent = dose.record?.time
       ? `实际记录：${new Date(dose.record.time).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
       : dose.med.note || "按医嘱使用";
@@ -371,6 +379,7 @@ function renderMeds() {
   el.medStart.value = med.startDate;
   el.medEnd.value = med.endDate;
   el.medNote.value = med.note;
+  el.medPreferredTimes.value = normalizeTimeList(med.preferredTimes).join(",");
   el.medColor.value = med.color;
   el.medActive.checked = med.active;
 }
@@ -403,7 +412,29 @@ function renderSettings() {
   el.wakeTime.value = state.settings.wakeTime;
   el.sleepTime.value = state.settings.sleepTime;
   el.defaultInterval.value = state.settings.defaultInterval;
-  el.blockedTimes.value = state.settings.blockedTimes.join("\n");
+  el.recommendedTimes.value = stringifyRecommendedTimes(state.settings.recommendedTimes);
+}
+
+function stringifyRecommendedTimes(recommendedTimes) {
+  return Object.keys(recommendedTimes || {})
+    .sort((a, b) => Number(a) - Number(b))
+    .map((count) => `${count}=${normalizeTimeList(recommendedTimes[count]).join(",")}`)
+    .join("\n");
+}
+
+function parseRecommendedTimes(value) {
+  const result = {};
+  value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const [count, times] = line.split("=");
+      const key = Number(count);
+      if (!Number.isFinite(key) || key < 1) return;
+      result[key] = normalizeTimeList(times);
+    });
+  return result;
 }
 
 function renderAll() {
@@ -412,7 +443,7 @@ function renderAll() {
   renderHeader();
   renderNextPanel(schedule);
   renderSummary(schedule);
-  renderWorkMode();
+  renderSequenceMode(schedule);
   renderTimeline(schedule);
   renderMeds();
   renderRecords(schedule);
@@ -516,12 +547,6 @@ el.selectedDate.addEventListener("change", () => {
   renderAll();
 });
 
-el.workModeToggle.addEventListener("change", () => {
-  state.settings.workMode = el.workModeToggle.checked;
-  saveState();
-  renderAll();
-});
-
 el.openSettingsButton.addEventListener("click", () => switchTab("settings"));
 
 el.medList.addEventListener("click", (event) => {
@@ -541,6 +566,7 @@ el.newMedButton.addEventListener("click", () => {
     startDate: selectedDate,
     endDate: addDays(selectedDate, 7),
     note: "双眼，每次1滴",
+    preferredTimes: [],
     color: "#116b61",
     active: true,
   };
@@ -560,6 +586,7 @@ el.medForm.addEventListener("submit", (event) => {
   med.startDate = el.medStart.value;
   med.endDate = el.medEnd.value;
   med.note = el.medNote.value.trim();
+  med.preferredTimes = normalizeTimeList(el.medPreferredTimes.value);
   med.color = el.medColor.value;
   med.active = el.medActive.checked;
   saveState();
@@ -580,10 +607,7 @@ el.settingsForm.addEventListener("submit", (event) => {
   state.settings.wakeTime = el.wakeTime.value;
   state.settings.sleepTime = el.sleepTime.value;
   state.settings.defaultInterval = Number(el.defaultInterval.value);
-  state.settings.blockedTimes = el.blockedTimes.value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  state.settings.recommendedTimes = parseRecommendedTimes(el.recommendedTimes.value);
   saveState();
   renderAll();
 });
