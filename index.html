@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>术后滴眼药水管理</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">半飞秒术后用药</p>
+          <h1>今日滴眼药水</h1>
+        </div>
+        <div class="today-meta">
+          <span id="todayLabel"></span>
+          <strong id="postOpDay"></strong>
+        </div>
+      </header>
+
+      <main>
+        <section class="status-grid" aria-label="今日状态">
+          <article class="next-panel" id="nextPanel">
+            <div class="panel-heading">
+              <span>下一步</span>
+              <button class="icon-button" id="notifyButton" type="button" title="开启浏览器提醒">提醒</button>
+            </div>
+            <h2 id="nextTitle">正在生成计划</h2>
+            <p id="nextDetail"></p>
+            <div class="action-row">
+              <button class="primary-action" id="completeNextButton" type="button">已滴</button>
+              <button class="secondary-action" id="delayNextButton" type="button">延后15分钟</button>
+            </div>
+          </article>
+
+          <article class="summary-panel">
+            <span>今日进度</span>
+            <strong id="todayProgress">0/0</strong>
+            <div class="progress-track">
+              <div id="progressBar"></div>
+            </div>
+            <p id="missedSummary">暂无逾期</p>
+          </article>
+
+          <article class="work-panel">
+            <div class="panel-heading">
+              <span>上班模式</span>
+              <label class="switch">
+                <input id="workModeToggle" type="checkbox" />
+                <span></span>
+              </label>
+            </div>
+            <p id="workModeText"></p>
+            <button class="secondary-action compact" id="openSettingsButton" type="button">调整不可滴时段</button>
+          </article>
+        </section>
+
+        <nav class="tabs" aria-label="页面切换">
+          <button class="tab active" data-tab="timeline" type="button">时间轴</button>
+          <button class="tab" data-tab="meds" type="button">药水后台</button>
+          <button class="tab" data-tab="records" type="button">记录</button>
+          <button class="tab" data-tab="settings" type="button">设置</button>
+        </nav>
+
+        <section class="tab-panel active" id="timelinePanel">
+          <div class="section-title">
+            <h2>今日计划</h2>
+            <div class="date-tools">
+              <button class="secondary-action compact" id="prevDayButton" type="button">前一天</button>
+              <input id="selectedDate" type="date" />
+              <button class="secondary-action compact" id="nextDayButton" type="button">后一天</button>
+            </div>
+          </div>
+          <div class="timeline" id="timelineList"></div>
+        </section>
+
+        <section class="tab-panel" id="medsPanel">
+          <div class="section-title">
+            <h2>药水后台</h2>
+            <button class="primary-action compact" id="newMedButton" type="button">新增药水</button>
+          </div>
+          <div class="med-layout">
+            <div class="med-list" id="medList"></div>
+            <form class="editor" id="medForm">
+              <input id="medId" type="hidden" />
+              <label>
+                药水名称
+                <input id="medName" required type="text" placeholder="例如：0.1%氟米龙滴眼液" />
+              </label>
+              <div class="form-grid">
+                <label>
+                  每天次数
+                  <input id="medTimes" min="1" max="12" required type="number" />
+                </label>
+                <label>
+                  单次间隔
+                  <input id="medInterval" min="1" max="60" required type="number" />
+                </label>
+                <label>
+                  开始日期
+                  <input id="medStart" required type="date" />
+                </label>
+                <label>
+                  结束日期
+                  <input id="medEnd" required type="date" />
+                </label>
+              </div>
+              <label>
+                用法备注
+                <textarea id="medNote" rows="3" placeholder="例如：双眼，每次1滴；使用前摇匀"></textarea>
+              </label>
+              <div class="form-grid">
+                <label>
+                  颜色
+                  <input id="medColor" type="color" />
+                </label>
+                <label class="checkbox-line">
+                  <input id="medActive" type="checkbox" />
+                  启用
+                </label>
+              </div>
+              <div class="action-row">
+                <button class="primary-action" type="submit">保存药水</button>
+                <button class="danger-action" id="deleteMedButton" type="button">删除</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="recordsPanel">
+          <div class="section-title">
+            <h2>用药记录</h2>
+            <button class="secondary-action compact" id="clearDayButton" type="button">清空当天记录</button>
+          </div>
+          <div class="records" id="recordsList"></div>
+        </section>
+
+        <section class="tab-panel" id="settingsPanel">
+          <div class="section-title">
+            <h2>设置</h2>
+            <button class="secondary-action compact" id="exportButton" type="button">导出配置</button>
+          </div>
+          <form class="settings-form" id="settingsForm">
+            <div class="form-grid">
+              <label>
+                手术日期
+                <input id="operationDate" type="date" />
+              </label>
+              <label>
+                起床时间
+                <input id="wakeTime" type="time" />
+              </label>
+              <label>
+                睡觉时间
+                <input id="sleepTime" type="time" />
+              </label>
+              <label>
+                默认间隔
+                <input id="defaultInterval" min="1" max="60" type="number" />
+              </label>
+            </div>
+            <label>
+              不可滴时段
+              <textarea id="blockedTimes" rows="4" placeholder="每行一个时间段，例如：09:30-12:00"></textarea>
+            </label>
+            <label>
+              导入配置
+              <textarea id="importBox" rows="5" placeholder="把导出的 JSON 粘贴到这里"></textarea>
+            </label>
+            <div class="action-row">
+              <button class="primary-action" type="submit">保存设置</button>
+              <button class="secondary-action" id="importButton" type="button">导入</button>
+              <button class="danger-action" id="resetButton" type="button">恢复默认</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <template id="timelineItemTemplate">
+      <article class="timeline-item">
+        <div class="time-block">
+          <strong class="dose-time"></strong>
+          <span class="dose-state"></span>
+        </div>
+        <div class="dose-body">
+          <h3></h3>
+          <p></p>
+          <small></small>
+        </div>
+        <div class="dose-actions">
+          <button class="primary-action compact complete-dose" type="button">已滴</button>
+          <button class="secondary-action compact delay-dose" type="button">延后</button>
+          <button class="secondary-action compact undo-dose" type="button">撤销</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
